@@ -1,0 +1,95 @@
+id: accountstack-demo
+name: AccountStack Financial Platform
+summary: Full-stack financial platform (web + 3 Go APIs in monorepo)
+details: |
+  AccountStack is a complete account management platform demo showcasing:
+  - React web application with reactive feature management (SSE)
+  - 3 Go microservices (accounts, transactions, insights)
+  - CloudBees CI/CD workflows with monorepo structure
+  - Helm-based Kubernetes deployment
+  - 9 feature flags with real-time updates
+  - Subdomain-based routing with wildcard DNS
+
+  This scenario automatically creates:
+  - GitHub repository (forked from CB-AccountStack/AccountStack)
+  - CloudBees component
+  - CloudBees environment with FM_TOKEN variable
+  - CloudBees application linking component and environment
+
+  REQUIRED: The following must exist at organization level:
+  - KUBECONFIG secret (scenario will prompt if missing)
+  - STACK_BASE_NAME variable (e.g., demos.se-main-demo.sa-demo.beescloud.com)
+
+  After setup completes, manually trigger the build-and-test workflow to deploy.
+  The application will be available at:
+  https://accountstack-{project_name}-{project_name}-{environment}.{STACK_BASE_NAME}
+
+  Examples (assuming STACK_BASE_NAME = demos.se-main-demo.sa-demo.beescloud.com):
+  - Project "acme", env "dev": https://accountstack-acme-acme-dev.demos.se-main-demo.sa-demo.beescloud.com
+  - Project "customer1", env "staging": https://accountstack-customer1-customer1-staging.demos.se-main-demo.sa-demo.beescloud.com
+
+  URL Pattern: {app_name}-{instance_id}-{environment_name}.{base_domain}
+  - app_name: "accountstack" (static in workflow)
+  - instance_id: {project_name} (dynamic, from scenario parameter)
+  - environment_name: "{project_name}-{environment}" (dynamic, from scenario parameters)
+  - base_domain: $STACK_BASE_NAME variable (must be set in CloudBees organization)
+
+  Note: Mimic performs file replacements to inject your project_name and environment
+  into the workflow file before the first run.
+
+parameter_schema:
+  properties:
+    project_name:
+      type: string
+      description: Project name (used for repo, component, and application)
+      placeholder: accountstack
+      pattern: "^[a-z0-9-]+$"
+    target_org:
+      type: string
+      description: GitHub organization for repository
+      placeholder: CB-AccountStack
+      pattern: "^[a-zA-Z0-9-]+$"
+    environment:
+      type: string
+      description: Deployment environment name
+      enum: ["dev", "staging", "prod"]
+      default: dev
+  required:
+    - project_name
+    - target_org
+    - environment
+
+required_secrets:
+  - KUBECONFIG
+  - DOCKER_TOKEN
+
+required_properties:
+  - DOCKER_USER
+
+repositories:
+  - source: CB-AccountStack/AccountStack
+    target_org: "${target_org}"
+    repo_name_template: "${project_name}"
+    create_component: true
+    replacements:
+      account-stack-dev:    "${project_name}-${environment}"
+      secrets.FM_TOKEN:     "vars.FM_TOKEN"
+    files_to_modify:
+      - ".cloudbees/workflows/build-and-test.yaml"
+      - ".cloudbees/workflows/deploy.yaml"
+
+environments:
+  - name: "${project_name}-${environment}"
+    env:
+      - name: ENVIRONMENT
+        value: "${environment}"
+      - name: PROJECT_NAME
+        value: "${project_name}"
+    create_fm_token_var: true
+
+applications:
+  - name: "${project_name}-app"
+    components:
+      - "${project_name}"
+    environments:
+      - "${project_name}-${environment}"

@@ -1,0 +1,93 @@
+id: autostack-demo
+name: AutoStack Vehicle Marketplace Platform
+summary: Full-stack vehicle marketplace (web + 2 Go APIs in monorepo)
+details: |
+  AutoStack is a complete vehicle marketplace platform demo showcasing:
+  - React web application with reactive feature management (SSE)
+  - 2 Go microservices (inventory, valuations)
+  - CloudBees CI/CD workflows with monorepo structure
+  - Helm-based Kubernetes deployment
+  - 8 automotive-specific feature flags with real-time updates
+  - International multi-currency support (5 currencies)
+  - Subdomain-based routing with wildcard DNS
+
+  This scenario automatically creates:
+  - GitHub repository (forked from CB-AutoStack/AutoStack)
+  - CloudBees component
+  - CloudBees environment with FM_TOKEN variable
+  - CloudBees application linking component and environment
+
+  REQUIRED: The following must exist at organization level: (Unify Golden Demo Unify Org has this already setup )
+  - KUBECONFIG secret (scenario will prompt if missing)
+  - STACK_BASE_NAME variable (e.g., demos.se-main-demo.sa-demo.beescloud.com)
+
+  After setup completes, manually trigger the build-and-test workflow to deploy.
+  The application will be available at:
+  https://autostack-{project_name}-{project_name}-{environment}.{STACK_BASE_NAME}
+
+  URL Pattern: {app_name}-{instance_id}-{environment_name}.{base_domain}
+  - app_name: "autostack" (static in workflow)
+  - instance_id: {project_name} (dynamic, from scenario parameter)
+  - environment_name: "{project_name}-{environment}" (dynamic, from scenario parameters)
+  - base_domain: $STACK_BASE_NAME variable (must be set in CloudBees organization)
+
+  Note: Mimic performs file replacements to inject your project_name and environment
+  into the workflow file before the first run.
+
+parameter_schema:
+  properties:
+    project_name:
+      type: string
+      description: Project name (used for repo, component, and application)
+      placeholder: autostack
+      pattern: "^[a-z0-9-]+$"
+    target_org:
+      type: string
+      description: GitHub organization for repository
+      placeholder: CB-AutoStack
+      pattern: "^[a-zA-Z0-9-]+$"
+    environment:
+      type: string
+      description: Deployment environment name
+      enum: ["dev", "staging", "prod"]
+      default: dev
+  required:
+    - project_name
+    - target_org
+    - environment
+
+required_secrets:
+  - KUBECONFIG
+  - DOCKER_TOKEN
+
+required_properties:
+  - DOCKER_USER
+
+repositories:
+  - source: CB-AutoStack/AutoStack
+    target_org: "${target_org}"
+    repo_name_template: "${project_name}"
+    create_component: true
+    replacements:
+      auto-stack-dev:        "${project_name}-${environment}"
+      "instance_id: demo":   "instance_id: ${project_name}"
+      secrets.FM_TOKEN:      "vars.FM_TOKEN"
+    files_to_modify:
+      - ".cloudbees/workflows/build-and-test.yaml"
+      - ".cloudbees/workflows/deploy.yaml"
+
+environments:
+  - name: "${project_name}-${environment}"
+    env:
+      - name: ENVIRONMENT
+        value: "${environment}"
+      - name: PROJECT_NAME
+        value: "${project_name}"
+    create_fm_token_var: true
+
+applications:
+  - name: "${project_name}-app"
+    components:
+      - "${project_name}"
+    environments:
+      - "${project_name}-${environment}"
